@@ -1,7 +1,12 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><script>
 (function(){
 const p=location.pathname;
-if(p.replace(/\/$/,'').toLowerCase()==='/hughes.adm')location.replace('/admin.html');
-else{sessionStorage.setItem('tf_path',p);location.replace('/');}
+const suffix=location.search+location.hash;
+if(p.replace(/\/$/,'').toLowerCase()==='/hughes.adm')
+  location.replace('/admin.html'+suffix);
+else {
+  sessionStorage.setItem('tf_path',p);
+  location.replace('/'+suffix);
+}
 })();
 </script></head><body>Redirecting to TeamFest...</body></html>
