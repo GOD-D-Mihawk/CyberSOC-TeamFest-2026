@@ -1,0 +1,1 @@
+window.TEAMFEST_CONFIG={url:"https://wntmqdjmthgbqvovpjrh.supabase.co",key:"sb_publishable_5TgvgRb22JSfc7HxqFnLjg_T3ClYedu"};
