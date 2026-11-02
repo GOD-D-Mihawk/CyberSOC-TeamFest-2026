@@ -1,12 +1,9 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><script>
 (function(){
-const p=location.pathname;
+const base='/CyberSOC-TeamFest-2026/';
+const relative=location.pathname.startsWith(base)?location.pathname.slice(base.length).replace(/\/$/,''):'';
 const suffix=location.search+location.hash;
-if(p.replace(/\/$/,'').toLowerCase()==='/hughes.adm')
-  location.replace('/admin.html'+suffix);
-else {
-  sessionStorage.setItem('tf_path',p);
-  location.replace('/'+suffix);
-}
+if(relative.toLowerCase()==='hughes.adm')location.replace(base+'admin.html'+suffix);
+else{sessionStorage.setItem('tf_path',relative);location.replace(base+suffix);}
 })();
 </script></head><body>Redirecting to TeamFest...</body></html>
