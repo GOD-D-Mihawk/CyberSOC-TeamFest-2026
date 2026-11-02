@@ -1,0 +1,31 @@
+import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.76.1';
+const cfg=window.TEAMFEST_CONFIG,db=cfg?.url&&cfg?.key?createClient(cfg.url,cfg.key):null;
+const $=id=>document.getElementById(id),slug=(sessionStorage.getItem('tf_path')||location.pathname).split('/').filter(Boolean)[0]?.toLowerCase()||'';
+sessionStorage.removeItem('tf_path');
+let person=null,choice='gabriel',deadline=Date.parse('2026-12-04T00:00:00+04:00');
+const plans=[['flat','🏝️','Flat Island Catamaran','08:45–16:00 · Grand Bay','Rs 2,030'],['gabriel','⛵','Gabriel Island Catamaran','09:00–16:00 · Grand Baie','Rs 2,030'],['cerfs','🌴','Île aux Cerfs','09:30–18:00 · Pointe Maurice','Rs 1,950'],['chamarel','🌿','Chamarel','09:00–16:00 · Chamarel','Rs 700 + lunch']];
+const tell=message=>$('message').textContent=message;
+$('personal').textContent=slug?'Personal link: /'+slug+' · Sign in using your registered email.':'Please open your personal invitation URL.';
+function navigate(page){if(page==='admin'){location.assign('/hughes.adm');return;}document.querySelectorAll('.screen').forEach(e=>e.classList.toggle('on',e.id===page));document.querySelectorAll('[data-go]').forEach(e=>e.classList.toggle('active',e.dataset.go===page));}
+document.querySelectorAll('[data-go],[data-action]').forEach(el=>el.onclick=()=>navigate(el.dataset.go||el.dataset.action));
+async function settings(){if(!db)return;const {data}=await db.from('tf_event_settings').select('vote_deadline').eq('singleton',true).maybeSingle();if(data?.vote_deadline){deadline=Date.parse(data.vote_deadline);tick()}}
+function tick(){let secs=Math.max(0,Math.floor((deadline-Date.now())/1000)),vals=[Math.floor(secs/86400),Math.floor(secs%86400/3600),Math.floor(secs%3600/60),secs%60];['d','h','m','s'].forEach((key,i)=>$(key).textContent=String(vals[i]).padStart(2,'0'));$('vstatus').textContent=secs?'OPEN':'CLOSED';$('savevote').disabled=!secs;}
+tick();setInterval(tick,1000);
+function renderTrips(){$('trips').replaceChildren();for(const p of plans){let b=document.createElement('button');b.className='trip'+(p[0]===choice?' on':'');const icon=document.createElement('span'),name=document.createElement('b'),desc=document.createElement('small'),price=document.createElement('strong');icon.textContent=p[1];name.textContent=p[2];desc.textContent=p[3];price.textContent=p[4];b.append(icon,name,desc,price);b.onclick=()=>{choice=p[0];renderTrips()};$('trips').append(b)}}
+renderTrips();
+async function load(){if(!db)return tell('Supabase is not configured.');await settings();const {data:{user}}=await db.auth.getUser();if(!user){person=null;$('auth').classList.remove('hide');$('portal').classList.add('hide');document.body.classList.remove('ready');return;}
+if(!slug||slug==='hughes.adm'){if(slug==='hughes.adm')location.replace('/admin.html');else tell('Open your personalised URL to access the event.');return}
+const claim=await db.rpc('tf_claim_account');if(claim.error)return tell('Unable to verify your invitation: '+claim.error.message);
+const {data:p,error}=await db.from('tf_participants').select('id,display_name,slug').eq('auth_user_id',user.id).maybeSingle();
+if(error||!p||p.slug!==slug){person=null;return tell('Account does not match this personal link. Sign out and use the correct invitation.')}
+person=p;$('welcome').textContent='Welcome, '+p.display_name+' 🎄';$('auth').classList.add('hide');$('portal').classList.remove('hide');document.body.classList.add('ready');document.querySelectorAll('[data-go="admin"]').forEach(e=>e.classList.add('hide'));tell('');await Promise.all([loadVote(),loadWish()]);}
+async function authenticate(register){if(!db)return;const email=$('email').value.trim(),pin=$('pin').value;if(!slug)return tell('Personalised invitation link required.');if(!/^[0-9]{8}$/.test(pin))return tell('PIN must contain exactly eight digits.');if(!email)return tell('Email is required.');if(register){const {error}=await db.auth.signUp({email,password:pin,options:{emailRedirectTo:location.origin+'/'+encodeURIComponent(slug)}});tell(error?error.message:'Check your email for the verification link, then return to sign in.');}else{const {error}=await db.auth.signInWithPassword({email,password:pin});if(error)tell('Sign-in failed: '+error.message);else await load()}}
+$('signup').onclick=()=>authenticate(true);$('login').onclick=()=>authenticate(false);
+$('logout').onclick=async()=>{await db?.auth.signOut();await load()};
+async function loadVote(){const {data}=await db.from('tf_votes').select('choice').eq('participant_id',person.id).maybeSingle();if(data?.choice)choice=data.choice;renderTrips();$('myvote').textContent=data?.choice?'Your vote: '+plans.find(p=>p[0]===choice)?.[2]:'No vote submitted yet.';}
+$('savevote').onclick=async()=>{await settings();if(!person||Date.now()>=deadline)return tell('Voting is closed.');const {error}=await db.from('tf_votes').upsert({participant_id:person.id,choice},{onConflict:'participant_id'});if(error)tell(error.message);else{tell('Vote saved!');await loadVote()}};
+async function loadWish(){const {data}=await db.from('tf_wishlists').select('likes,avoid,ideas,surprise').eq('participant_id',person.id).maybeSingle();$('likes').value=data?.likes||'';$('avoid').value=data?.avoid||'';$('ideas').value=data?.ideas||'';$('surprise').checked=data?.surprise??true}
+$('savewishlist').onclick=async()=>{if(!person)return;const {error}=await db.from('tf_wishlists').upsert({participant_id:person.id,likes:$('likes').value,avoid:$('avoid').value,ideas:$('ideas').value,surprise:$('surprise').checked},{onConflict:'participant_id'});tell(error?error.message:'Wishlist saved securely!')};
+$('myrecipient').onclick=async()=>{if(!person)return;const {data,error}=await db.functions.invoke('tf-my-recipient',{body:{}});$('recipient').textContent=error?'Recipient service temporarily unavailable.':data?.recipient?('Your recipient: '+data.recipient.display_name+'\nLikes: '+(data.recipient.likes||'Not specified')+'\nAvoid: '+(data.recipient.avoid||'Not specified')+'\nIdeas: '+(data.recipient.ideas||'Not specified')):'Secret Santa draw not yet executed.'};
+$('getstatus').onclick=()=>navigate('admin');
+if(db){db.auth.onAuthStateChange(()=>{setTimeout(load,0)});load();}else tell('Missing Supabase configuration');
